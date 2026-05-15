@@ -7,9 +7,14 @@ function renderEmpleados() {
   const tieneActividad=e=>empInSet(e,activeSet);
 
   // Solo activos con actividad y de esta sucursal
+  // New employees (ingreso this month) always show even without activity
+  const now_m = new Date();
+  const curMp  = `${now_m.getFullYear()}-${String(now_m.getMonth()+1).padStart(2,'0')}`;
+  const isNewThisMonth = e => e.fecha_ingreso && e.fecha_ingreso.startsWith(curMp);
+
   const activos = empleados.filter(e =>
     e.activo &&
-    tieneActividad(e) &&
+    (tieneActividad(e) || isNewThisMonth(e)) &&
     (!currentSucursal || !e.sucursal_id || e.sucursal_id === currentSucursal.id)
   );
 
@@ -115,15 +120,17 @@ async function saveNewEmployee() {
   // Insert into Supabase and get real UUID, then sync disponibilidad
   try{
     const created = await sb_insertEmpleado({
-      sucursal_id: emp.sucursal_id, nombre: emp.nombre,
-      apellido_paterno: emp.apellido_paterno, apellido_materno: emp.apellido_materno,
-      puesto: emp.puesto, fecha_ingreso: emp.fecha_ingreso,
-      activo: true, es_porter: emp.es_porter,
+      sucursal_id:      emp.sucursal_id,
+      nombre:           emp.nombre,
+      apellido_paterno: emp.apellido_paterno,
+      apellido_materno: emp.apellido_materno,
+      puesto:           emp.puesto,
+      fecha_ingreso:    emp.fecha_ingreso,
+      activo:           true,
+      es_porter:        emp.es_porter,
+      disponibilidad:   emp.disponibilidad,  // JSONB column — one shot
     });
-    if(created?.id){
-      emp.id = created.id;
-      await sb_syncDisponibilidad(created.id, emp.disponibilidad);
-    }
+    if(created?.id) emp.id = created.id;
   }catch(e){console.warn('New emp sync:', e.message);}
   closeModal('emp-modal');
   showToast(`${nombre} ${apPat} registrado correctamente.`);
