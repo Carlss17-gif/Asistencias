@@ -53,15 +53,7 @@ async function loadBranchData(){
     if(r.empleados.length>0){
       empleados=r.empleados;
       asistencias=r.asistencias;
-      // Load disponibilidad from Supabase and attach to employees
-      try{
-        const disp = await sbFetch(`disponibilidad?empleado_id=in.(${empleados.map(e=>`"${e.id}"`).slice(0,50).join(',')})&select=*`);
-        if(disp && disp.length){
-          const byEmp = {};
-          disp.forEach(d=>{ if(!byEmp[d.empleado_id]) byEmp[d.empleado_id]=[]; byEmp[d.empleado_id].push(d); });
-          empleados.forEach(e=>{ if(byEmp[e.id]) e.disponibilidad=byEmp[e.id]; });
-        }
-      }catch(e){console.warn('Disp load:',e.message);}
+      // disponibilidad ya viene en la columna JSONB del empleado
       // Also merge any newer asistencias from localStorage
       const k=sid===SUC_OAX_ID?'oax':'teh';
       const localAtts=getLS('att_'+k)||[];

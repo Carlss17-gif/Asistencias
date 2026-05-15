@@ -36,41 +36,27 @@ async function sb_insertEmpleado(emp){
   return Array.isArray(r)?r[0]:r;
 }
 
-/* DISPONIBILIDAD — upsert all days for one employee */
+/* DISPONIBILIDAD — guardada como JSONB en la columna empleados.disponibilidad
+   Un solo UPDATE en lugar de 7 rows en tabla separada.
+   Array de 7 objetos: [{dia_semana:0,hora_inicio:'08:00',hora_fin:'16:00',disponible:true},...]
+*/
 async function sb_syncDisponibilidad(empleado_id, disponibilidad){
-  if(!empleado_id || !disponibilidad || !disponibilidad.length) return;
-  // Delete existing then insert fresh (simplest approach)
-  await sbFetch(`disponibilidad?empleado_id=eq.${empleado_id}`,'DELETE',null,{'Prefer':'return=minimal'});
-  const rows = disponibilidad.map(d=>({
-    empleado_id,
-    dia_semana:  d.dia_semana,
-    hora_inicio: d.hora_inicio||'08:00',
-    hora_fin:    d.hora_fin||'16:00',
-    disponible:  d.disponible!==false,
-  }));
-  return sbFetch('disponibilidad','POST',rows,{'Prefer':'resolution=ignore-duplicates,return=minimal'});
-}
-
-/* Load disponibilidad for all employees of a branch */
-async function sb_getDisponibilidad(sucursal_id){
-  return sbFetch(`disponibilidad?select=*,empleados!inner(sucursal_id)&empleados.sucursal_id=eq.${sucursal_id}`);
-}
-
-/* Upsert one employee and sync their disponibilidad */
-async function sb_syncEmpleadoCompleto(emp){
-  // Update employee fields
-  const {disponibilidad, ...empData} = emp;
-  if(emp.id && !emp.id.startsWith('emp_')){
-    // Real UUID — just update
-    await sbFetch(`empleados?id=eq.${emp.id}`,'PATCH',{
-      activo: emp.activo, fecha_baja: emp.fecha_baja||null,
-      puesto: emp.puesto, fecha_ingreso: emp.fecha_ingreso||null,
-    });
-  }
-  // Sync disponibilidad
-  if(disponibilidad && emp.id && !emp.id.startsWith('emp_')){
-    await sb_syncDisponibilidad(emp.id, disponibilidad);
-  }
+  if(!empleado_id || !disponibilidad) return;
+  // Limpiar: solo guardar los campos necesarios
+  const arr = DAYS.map((_, i) => {
+    const d = disponibilidad.find(x => x.dia_semana === i) || {};
+    return {
+      dia_semana:  i,
+      hora_inicio: d.hora_inicio || '08:00',
+      hora_fin:    d.hora_fin    || '16:00',
+      disponible:  d.disponible !== false,
+    };
+  });
+  // Un solo PATCH en la tabla empleados
+  return sbFetch(`empleados?id=eq.${empleado_id}`, 'PATCH',
+    { disponibilidad: arr },
+    { 'Prefer': 'return=minimal' }
+  );
 }
 async function sb_bulkUpsertEmpleados(records){
   const CHUNK=25;const all=[];
