@@ -1,3 +1,15 @@
+/* getEmpDisp: returns internal [{dia_semana,hora_inicio,hora_fin,disponible}] format
+   regardless of whether emp.disponibilidad is TEXT[] or object array */
+function getEmpDisp(emp){
+  const d = emp.disponibilidad;
+  if(!d||!d.length) return null;
+  // If already object array
+  if(typeof d[0]==='object') return d;
+  // TEXT[] format: ['08:00-16:00', null, ...] — Mon=index0
+  if(typeof arrayToDisp === 'function') return arrayToDisp(d);
+  return null;
+}
+
 /* js/horarios.js  v7 */
 
 let schedWeek        = new Date();
@@ -198,13 +210,14 @@ function generateWeekSchedule(){
 
 function _pickRest(candidates,emp){
   if(!candidates||!candidates.length)return null;
-  const unavail=candidates.filter(d=>{const a=emp.disponibilidad?.find(av=>av.dia_semana===d.getDay());return a&&a.disponible===false;});
+  const _disp = getEmpDisp(emp);
+  const unavail=candidates.filter(d=>{const a=_disp?.find(av=>av.dia_semana===d.getDay());return a&&a.disponible===false;});
   const pool=unavail.length>0?unavail:candidates;
   return fmtDate(pool[Math.floor(Math.random()*pool.length)]);
 }
 function _assignWeek(emp,weekDates,restDateStr){
   weekDates.forEach(d=>{
-    const ds=fmtDate(d),avail=emp.disponibilidad?.find(a=>a.dia_semana===d.getDay()),isOff=ds===restDateStr||(avail&&avail.disponible===false);
+    const ds=fmtDate(d),avail=getEmpDisp(emp)?.find(a=>a.dia_semana===d.getDay()),isOff=ds===restDateStr||(avail&&avail.disponible===false);
     if(isOff)horarioDetalle.push({id:genId('hd'),empleado_id:emp.id,fecha:ds,sucursal_id:currentSucursal?.id,hora_inicio:null,hora_fin:null,es_descanso:true,tipo:'descanso'});
     else{const s=avail?.hora_inicio&&avail?.hora_fin?{hi:avail.hora_inicio,hf:avail.hora_fin}:SHIFT_OPTIONS[Math.floor(Math.random()*SHIFT_OPTIONS.length)];
       horarioDetalle.push({id:genId('hd'),empleado_id:emp.id,fecha:ds,sucursal_id:currentSucursal?.id,hora_inicio:s.hi,hora_fin:s.hf,es_descanso:false,tipo:'trabajo'});}

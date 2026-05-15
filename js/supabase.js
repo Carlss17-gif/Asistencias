@@ -32,27 +32,45 @@ async function sb_updateEmpleado(id,data){
   return sbFetch(`empleados?id=eq.${id}`,'PATCH',data);
 }
 async function sb_insertEmpleado(emp){
-  const r=await sbFetch('empleados','POST',emp);
+  // Convert disponibilidad to clean array format before insert
+  const payload = {...emp};
+  if(payload.disponibilidad && Array.isArray(payload.disponibilidad) && payload.disponibilidad[0]?.dia_semana !== undefined){
+    payload.disponibilidad = dispToArray(payload.disponibilidad);
+  }
+  const r=await sbFetch('empleados','POST',payload);
   return Array.isArray(r)?r[0]:r;
 }
 
-/* DISPONIBILIDAD — guardada como JSONB en la columna empleados.disponibilidad
-   Un solo UPDATE en lugar de 7 rows en tabla separada.
-   Array de 7 objetos: [{dia_semana:0,hora_inicio:'08:00',hora_fin:'16:00',disponible:true},...]
+/* DISPONIBILIDAD — array de 7 strings en columna empleados.disponibilidad
+   Posicion 0=Lun, 1=Mar, 2=Mie, 3=Jue, 4=Vie, 5=Sab, 6=Dom
+   Valor: "HH:MM-HH:MM" si trabaja ese dia, null si no trabaja
+   Ejemplo: ["08:00-16:00","08:00-16:00",null,"09:00-17:00","08:00-16:00",null,null]
 */
+function dispToArray(disponibilidad) {
+  // Days order: 0=Lun,1=Mar,2=Mie,3=Jue,4=Vie,5=Sab,6=Dom
+  // Note: JS getDay() = 0=Dom,1=Lun...6=Sab — we remap to Mon-first
+  const MON_FIRST = [1,2,3,4,5,6,0]; // dia_semana values for Mon..Sun
+  return MON_FIRST.map(diaSemana => {
+    const d = disponibilidad.find(x => x.dia_semana === diaSemana);
+    if(!d || d.disponible === false) return null;
+    return `${d.hora_inicio||'08:00'}-${d.hora_fin||'16:00'}`;
+  });
+}
+
+function arrayToDisp(arr) {
+  // Convert back from array to internal format
+  const MON_FIRST = [1,2,3,4,5,6,0];
+  return (arr||[]).map((val, i) => ({
+    dia_semana:  MON_FIRST[i],
+    hora_inicio: val ? val.split('-')[0] : '08:00',
+    hora_fin:    val ? val.split('-')[1] : '16:00',
+    disponible:  val !== null,
+  }));
+}
+
 async function sb_syncDisponibilidad(empleado_id, disponibilidad){
   if(!empleado_id || !disponibilidad) return;
-  // Limpiar: solo guardar los campos necesarios
-  const arr = DAYS.map((_, i) => {
-    const d = disponibilidad.find(x => x.dia_semana === i) || {};
-    return {
-      dia_semana:  i,
-      hora_inicio: d.hora_inicio || '08:00',
-      hora_fin:    d.hora_fin    || '16:00',
-      disponible:  d.disponible !== false,
-    };
-  });
-  // Un solo PATCH en la tabla empleados
+  const arr = dispToArray(disponibilidad);
   return sbFetch(`empleados?id=eq.${empleado_id}`, 'PATCH',
     { disponibilidad: arr },
     { 'Prefer': 'return=minimal' }
