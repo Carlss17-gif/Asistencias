@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Carl's Jr — Gestión de Personal</title>
+<link rel="stylesheet" href="css/main.css">
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="login-screen">
+  <div class="login-left">
+    <div>
+      <div class="login-logo">
+        <div class="login-logo-box">CJ</div>
+        <div class="login-logo-txt">Carl's Jr</div>
+      </div>
+      <div class="login-h">Sistema de<strong>Gestión de Personal</strong></div>
+      <p class="login-desc">Control de asistencias, horarios y reportes por sucursal.</p>
+    </div>
+    <div class="login-foot">Carl's Jr Mexico &copy; 2026 &mdash; Uso interno</div>
+  </div>
+  <div class="login-right">
+    <div class="login-panel">
+      <h2>Iniciar sesión</h2>
+      <p>Ingresa tus credenciales de acceso</p>
+      <div class="login-card">
+        <div class="form-group">
+          <label class="field-label">Correo electrónico</label>
+          <input type="text" id="login-email" value="gerente.oaxaca@carlsjr.mx">
+        </div>
+        <div class="form-group" style="margin-bottom:0">
+          <label class="field-label">Contraseña</label>
+          <input type="password" id="login-pass" value="oaxaca123">
+        </div>
+        <div style="margin-top:14px">
+          <button class="btn-primary" style="width:100%;justify-content:center;height:36px;font-size:13px" onclick="doLogin()">Entrar</button>
+        </div>
+      </div>
+      <div class="login-hint">Oaxaca: <strong>oaxaca123</strong> &nbsp;&middot;&nbsp; Tehuacán: <strong>tehuacan123</strong> &nbsp;&middot;&nbsp; Admin: <strong>admin123</strong></div>
+    </div>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="app">
+  <header class="topbar">
+    <div class="topbar-logo">CJ</div>
+    <div class="topbar-sep"></div>
+    <div class="topbar-branch"><div class="branch-dot"></div><span id="branch-name">Sucursal</span></div>
+    <div class="topbar-spacer"></div>
+    <span class="topbar-user" id="user-name"></span>
+    <div class="topbar-sep"></div>
+    <button class="btn-logout" onclick="doLogout()">Cerrar sesión</button>
+  </header>
+  <nav class="tabs">
+    <div class="tab active" onclick="showTab('asistencia')" id="tab-asistencia">Asistencia</div>
+    <div class="tab"        onclick="showTab('horarios')"   id="tab-horarios">Horarios</div>
+    <div class="tab"        onclick="showTab('empleados')"  id="tab-empleados">Empleados</div>
+    <div class="tab"        onclick="showTab('reportes')"   id="tab-reportes">Reportes</div>
+  </nav>
+  <main class="content">
+    <div id="tab-asistencia-content"></div>
+    <div id="tab-horarios-content"  style="display:none"></div>
+    <div id="tab-empleados-content" style="display:none"></div>
+    <div id="tab-reportes-content"  style="display:none"></div>
+  </main>
+</div>
+
+<!-- MODAL: ASISTENCIA -->
+<div class="modal-overlay" id="status-modal">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal('status-modal')">&#x2715;</button>
+    <div class="modal-hd">
+      <div class="modal-title" id="modal-emp-name">Registrar asistencia</div>
+      <div class="modal-subtitle" id="modal-date-label"></div>
+    </div>
+    <div class="modal-body">
+      <div class="field-label" style="margin-bottom:8px">Estado del día</div>
+      <div class="status-grid">
+        <div class="status-option" onclick="selectStatus(1)" id="so-1"><span class="so-label">Asistió</span></div>
+        <div class="status-option" onclick="selectStatus(2)" id="so-2"><span class="so-label">Falta</span></div>
+        <div class="status-option" onclick="selectStatus(4)" id="so-4"><span class="so-label">Descanso</span></div>
+        <div class="status-option" onclick="selectStatus(3)" id="so-3"><span class="so-label">Incapacidad</span></div>
+        <div class="status-option" onclick="selectStatus(5)" id="so-5"><span class="so-label">Vacación</span></div>
+        <div class="status-option" onclick="selectStatus(6)" id="so-6"><span class="so-label">Baja</span></div>
+        <div class="status-option" onclick="selectStatus(7)" id="so-7"><span class="so-label">Permiso s/goce</span></div>
+        <div class="status-option" onclick="selectStatus(0)" id="so-0"><span class="so-label">Sin registro</span></div>
+      </div>
+      <div class="inc-box" id="inc-box">
+        <div class="form-group">
+          <label class="field-label">Días de incapacidad</label>
+          <input type="number" id="inc-days" min="1" placeholder="Número de días">
+        </div>
+        <div class="form-group" style="margin-bottom:0">
+          <label class="field-label">Subir comprobante médico</label>
+          <input type="file" id="inc-file" accept=".pdf,.jpg,.jpeg,.png">
+          <p class="field-hint">Se guardará en Google Drive con el nombre del empleado.</p>
+          <div id="upload-prog" style="display:none;margin-top:6px">
+            <div style="font-size:11px;color:var(--muted)" id="upload-txt">Subiendo...</div>
+            <div class="upload-bar-wrap"><div class="upload-bar" id="upload-bar" style="width:0%"></div></div>
+          </div>
+        </div>
+      </div>
+      <div class="form-group" style="margin-top:10px;margin-bottom:0">
+        <label class="field-label">Observaciones (opcional)</label>
+        <input type="text" id="modal-notes" placeholder="Notas adicionales...">
+      </div>
+    </div>
+    <div id="modal-incidencia-btn" style="display:none;padding:0 20px 12px">
+      <button class="btn-secondary" style="width:100%;font-size:12px"
+        onclick="closeModal('status-modal');showIncidenciaModal(modalState.empId,modalState.day,modalState.selYear||selYear,modalState.selMonth||selMonth)">
+        Registrar incidencia / acta para este día
+      </button>
+    </div>
+    <div class="modal-ft">
+      <button class="btn-save" onclick="saveStatus()">Guardar</button>
+      <button class="btn-outline" onclick="closeModal('status-modal')">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: NUEVO EMPLEADO -->
+<div class="modal-overlay" id="emp-modal">
+  <div class="modal modal-wide">
+    <button class="modal-close" onclick="closeModal('emp-modal')">&#x2715;</button>
+    <div class="modal-hd">
+      <div class="modal-title">Registrar empleado</div>
+      <div class="modal-subtitle">Complete los datos y configure la disponibilidad horaria.</div>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="form-group"><label class="field-label">Nombre(s)</label><input type="text" id="new-nombre"></div>
+        <div class="form-group"><label class="field-label">Apellido Paterno</label><input type="text" id="new-apPat"></div>
+        <div class="form-group"><label class="field-label">Apellido Materno</label><input type="text" id="new-apMat"></div>
+        <div class="form-group">
+          <label class="field-label">Puesto</label>
+          <select id="new-puesto">
+            <option>Gerente</option><option>Supervisor</option><option>Crew Lider</option>
+            <option selected>Colab. Gral.</option><option>C. Gral. Cerrador</option>
+            <option>Porter</option><option>Entrenador</option>
+          </select>
+        </div>
+        <div class="form-group"><label class="field-label">Fecha de Ingreso</label><input type="date" id="new-ingreso"></div>
+        <div class="form-group">
+          <label class="field-label">Clasificación</label>
+          <select id="new-porter"><option value="false">Normal</option><option value="true">Porter (L-V fijo)</option></select>
+        </div>
+        <div class="form-group form-full">
+          <label class="field-label">Disponibilidad por día</label>
+          <p class="field-hint" style="margin-bottom:7px">Activa los días y ajusta los horarios.</p>
+          <div class="avail-grid" id="avail-grid"></div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-ft">
+      <button class="btn-save" onclick="saveNewEmployee()">Registrar</button>
+      <button class="btn-outline" onclick="closeModal('emp-modal')">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: EDITAR TURNO -->
+<div class="modal-overlay" id="sched-day-modal">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal('sched-day-modal')">&#x2715;</button>
+    <div class="modal-hd"><div class="modal-title" id="sched-day-title">Editar turno</div></div>
+    <div class="modal-body">
+      <div class="form-group" id="sched-tipo-group">
+        <label class="field-label">Tipo de día</label>
+        <select id="sched-tipo"><option value="trabajo">Trabajo</option><option value="descanso">Descanso</option><option value="vacacion">Vacación</option><option value="baja">Baja</option></select>
+      </div>
+      <div id="sched-hours-group">
+        <div class="form-row-2">
+          <div class="form-group"><label class="field-label">Entrada</label><select id="sched-inicio"></select></div>
+          <div class="form-group"><label class="field-label">Salida</label><select id="sched-fin"></select></div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-ft" id="sched-modal-actions">
+      <button class="btn-save" onclick="saveSchedDay()">Guardar</button>
+      <button class="btn-outline" onclick="closeModal('sched-day-modal')">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+<script src="js/config.js"></script>
+<script src="js/data.js"></script>
+<script src="js/utils.js"></script>
+<script src="js/supabase.js"></script>
+<script src="js/historical_data.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/tabs.js"></script>
+<script src="js/asistencia.js"></script>
+<script src="js/horarios.js"></script>
+<script src="js/empleados.js"></script>
+<script src="js/reportes.js"></script>
+<script src="js/pdf.js"></script>
+<script src="js/admin.js"></script>
+<script src="js/docs.js"></script>
+<script src="js/modals.js"></script>
+</body>
+</html>
