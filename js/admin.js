@@ -1,4 +1,4 @@
-/* js/admin.js  v7 */
+/* js/admin.js  v8 */
 let adminState={year:new Date().getFullYear(),month:new Date().getMonth()+1,
   sucFilt:'all',empsOax:[],empsTeh:[],attsOax:[],attsTeh:[]};
 
@@ -90,12 +90,11 @@ function renderAdminResults(){
   if(sucFilt==='all'||sucFilt==='teh')
     html+=_adminBranch('Tehuacán',adminState.empsTeh,adminState.attsTeh,year,month,nDays,todayStr,SUC_TEH_ID);
   document.getElementById('admin-results').innerHTML=html||
-    '<div style="text-align:center;padding:40px;color:var(--muted)">Sin datos.</div>';
+    '<div style="text-align:center;padding:40px;color:var(--muted)">Sin datos para este período.</div>';
 }
 
 function _adminBranch(nombre,emps,atts,year,month,nDays,todayStr,sucId){
   const mp=`${year}-${String(month).padStart(2,'0')}`;
-  // att map: empId|empNombre|empApellido → dias[]
   const attMap={};
   atts.forEach(a=>{
     if(a.empleado_id) attMap[a.empleado_id]=a.dias;
@@ -104,23 +103,13 @@ function _adminBranch(nombre,emps,atts,year,month,nDays,todayStr,sucId){
       attMap[`${(a.empleado_nombre||'').toLowerCase()}|${(a.empleado_apellido||'').toLowerCase()}`]=a.dias;
     }
   });
-
-  // Build att lookup (attMap must be defined first)
-  const _empDias = e =>
-    attMap[e.id] ||
-    attMap[`${e.nombre}|${e.apellido_paterno}`] ||
-    attMap[`${(e.nombre||'').toLowerCase()}|${(e.apellido_paterno||'').toLowerCase()}`] || null;
-
-  const visible=emps.filter(e=>
-    empVisibleInMonth(e,year,month,_empDias(e),false) &&
-    e.sucursal_id===sucId
-  );
+  const _empDias=e=>attMap[e.id]||attMap[`${e.nombre}|${e.apellido_paterno}`]||attMap[`${(e.nombre||'').toLowerCase()}|${(e.apellido_paterno||'').toLowerCase()}`]||null;
+  const visible=emps.filter(e=>empVisibleInMonth(e,year,month,_empDias(e),false)&&e.sucursal_id===sucId);
   if(!visible.length) return '';
 
   let totA=0,totF=0,totI=0,totD=0;
-  visible.forEach(e=>{
-    const d=attMap[e.id]||attMap[`${e.nombre}|${e.apellido_paterno}`]||[];
-    d.forEach(c=>{if(c===1)totA++;else if(c===2)totF++;else if(c===3)totI++;else if(c===4)totD++;});
+  atts.forEach(a=>{
+    if(a.dias) a.dias.forEach(c=>{if(c===1)totA++;else if(c===2)totF++;else if(c===3)totI++;else if(c===4)totD++;});
   });
 
   const DOW=['D','L','M','X','J','V','S'];
@@ -129,14 +118,13 @@ function _adminBranch(nombre,emps,atts,year,month,nDays,todayStr,sucId){
   const ths=days.map(d=>{
     const dt=new Date(year,month-1,d);
     const ds=`${mp}-${String(d).padStart(2,'0')}`;
-    const isW=dt.getDay()===0||dt.getDay()===6;
-    const isT=ds===todayStr;
+    const isW=dt.getDay()===0||dt.getDay()===6, isT=ds===todayStr;
     return `<th class="th-day${isT?' is-today':''}${isW?' is-wknd':''}" title="${dt.toLocaleDateString('es-MX',{weekday:'long',day:'numeric'})}">
       <div>${d}</div><div style="font-size:8px;font-weight:400">${DOW[dt.getDay()]}</div></th>`;
   }).join('');
 
   const rows=visible.map(emp=>{
-    const dias=attMap[emp.id]||attMap[`${emp.nombre}|${emp.apellido_paterno}`]||Array(nDays).fill(0);
+    const dias=_empDias(emp)||Array(nDays).fill(0);
     const isBaja=isBajaMonth(emp,year,month);
     let nA=0,nF=0;
     const cells=days.map((d,i)=>{
@@ -164,62 +152,74 @@ function _adminBranch(nombre,emps,atts,year,month,nDays,todayStr,sucId){
     </tr>`;
   }).join('');
 
-  return `<div class="branch-section">
-    <div class="branch-hd">
-      <div class="branch-hd-name">${nombre}</div>
-      <div class="branch-stats">
-        <span><strong style="color:var(--c1-dot)">${totA}</strong> asistencias</span>
-        <span><strong style="color:var(--c2-dot)">${totF}</strong> faltas</span>
-        ${totI?`<span><strong style="color:var(--c3-dot)">${totI}</strong> incapacidades</span>`:''}
-        <span><strong style="color:var(--muted)">${totD}</strong> descansos</span>
+  return `
+    <div class="branch-section">
+      <div class="branch-hd">
+        <div class="branch-hd-name">${nombre}</div>
+        <div class="branch-stats">
+          <span><strong style="color:var(--c1-dot)">${totA}</strong> asistencias</span>
+          <span><strong style="color:var(--c2-dot)">${totF}</strong> faltas</span>
+          ${totI?`<span><strong style="color:var(--c3-dot)">${totI}</strong> incapacidades</span>`:''}
+          <span><strong style="color:var(--muted)">${totD}</strong> descansos</span>
+        </div>
       </div>
-    </div>
-    <div class="branch-body">
-      <div class="att-table-wrap">
-        <table class="att-table">
-          <thead><tr><th>Nombre Completo</th><th>Puesto</th>${ths}<th style="text-align:right">Resumen</th></tr></thead>
-          <tbody>${rows}</tbody>
-        </table>
+      <div class="branch-body">
+        <div class="att-table-wrap">
+          <table class="att-table">
+            <thead><tr><th>Nombre Completo</th><th>Puesto</th>${ths}<th style="text-align:right">Resumen</th></tr></thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>
+        <div class="legend-row">
+          <div class="legend-item"><div class="legend-dot ld1"></div>Asistió</div>
+          <div class="legend-item"><div class="legend-dot ld2"></div>Falta</div>
+          <div class="legend-item"><div class="legend-dot ld3"></div>Incapacidad</div>
+          <div class="legend-item"><div class="legend-dot ld4"></div>Descanso</div>
+          <div class="legend-item"><div class="legend-dot ld5"></div>Vacación</div>
+          <div class="legend-item"><div class="legend-dot ld6"></div>Baja</div>
+          <div class="legend-item"><div class="legend-dot ld7"></div>Permiso/Susp.</div>
+          <div class="legend-item"><div class="legend-dot ld0"></div>Sin registro</div>
+        </div>
       </div>
-      <div class="legend-row">
-        <div class="legend-item"><div class="legend-dot ld1"></div>Asistió</div>
-        <div class="legend-item"><div class="legend-dot ld2"></div>Falta</div>
-        <div class="legend-item"><div class="legend-dot ld3"></div>Incapacidad</div>
-        <div class="legend-item"><div class="legend-dot ld4"></div>Descanso</div>
-        <div class="legend-item"><div class="legend-dot ld5"></div>Vacación</div>
-        <div class="legend-item"><div class="legend-dot ld6"></div>Baja</div>
-        <div class="legend-item"><div class="legend-dot ld0"></div>Sin registro</div>
-      </div>
-    </div>
-  </div>`;
+    </div>`;
 }
 
-/* PDF */
 function exportAdminPDF(){
-  const{jsPDF}=window.jspdf;const doc=new jsPDF({orientation:'landscape',format:'a3'});
-  const{year,month}=adminState;const nDays=daysInMonth(year,month);
+  if(!window.jspdf){showToast('jsPDF no disponible','error');return;}
+  const{jsPDF}=window.jspdf;
+  const doc=new jsPDF({orientation:'landscape',format:'a3'});
+  const{year,month,sucFilt}=adminState;
+  const nDays=daysInMonth(year,month);
   const days=Array.from({length:nDays},(_,i)=>i+1);
   const mp=`${year}-${String(month).padStart(2,'0')}`;
   const todayStr=fmtDate(new Date());
+  const ABR={0:'',1:'A',2:'F',3:'I',4:'D',5:'V',6:'B',7:'P'};
+  const COL={1:[220,252,231],2:[254,226,226],3:[219,234,254],4:[241,245,249],5:[237,233,254],6:[255,237,213],7:[254,249,195]};
+
   doc.setFillColor(15,23,42);doc.rect(0,0,420,15,'F');
   doc.setTextColor(255,255,255);doc.setFontSize(11);doc.setFont('helvetica','bold');
   doc.text(`Carl's Jr — Asistencia ${MONTHS_ES[month]} ${year}`,10,10);
-  doc.setTextColor(0,0,0);let y=18;
-  const ABR={0:'',1:'A',2:'F',3:'I',4:'D',5:'V',6:'B',7:'P'};
-  const COL={1:[220,252,231],2:[254,226,226],3:[219,234,254],4:[241,245,249],5:[237,233,254],6:[255,237,213]};
-  [[adminState.empsOax,adminState.attsOax,'Porfirio Díaz — Oaxaca',SUC_OAX_ID],
-   [adminState.empsTeh,adminState.attsTeh,'Tehuacán',SUC_TEH_ID]].forEach(([emps,atts,nom])=>{
-    if(adminState.sucFilt!=='all'&&((adminState.sucFilt==='oax'&&nom.includes('Tehuacán'))||(adminState.sucFilt==='teh'&&nom.includes('Díaz')))) return;
-    const amPdf={};atts.forEach(a=>{if(a.empleado_id)amPdf[a.empleado_id]=a.dias;amPdf[`${a.empleado_nombre}|${a.empleado_apellido}`]=a.dias;});
-    const vis=emps.filter(e=>empVisibleInMonth(e,year,month,amPdf[e.id]||amPdf[`${e.nombre}|${e.apellido_paterno}`],false)&&e.sucursal_id===sucId);if(!vis.length)return;
-    const am={};atts.forEach(a=>{if(a.empleado_id)am[a.empleado_id]=a.dias;am[`${a.empleado_nombre}|${a.empleado_apellido}`]=a.dias;});
-    doc.setFontSize(9);doc.setFont('helvetica','bold');doc.text(nom,10,y);y+=4;
+  doc.setFontSize(9);doc.setFont('helvetica','normal');
+  doc.text(fmtDate(new Date()),420-10,10,{align:'right'});
+  doc.setTextColor(0,0,0);
+
+  let y=18;
+  const branches=[];
+  if(sucFilt==='all'||sucFilt==='oax') branches.push({name:'Porfirio Díaz — Oaxaca',emps:adminState.empsOax,atts:adminState.attsOax,sucId:SUC_OAX_ID});
+  if(sucFilt==='all'||sucFilt==='teh') branches.push({name:'Tehuacán',emps:adminState.empsTeh,atts:adminState.attsTeh,sucId:SUC_TEH_ID});
+
+  branches.forEach(br=>{
+    const amPdf={};
+    br.atts.forEach(a=>{if(a.empleado_id)amPdf[a.empleado_id]=a.dias;if(a.empleado_nombre)amPdf[`${a.empleado_nombre}|${a.empleado_apellido}`]=a.dias;});
+    const vis=br.emps.filter(e=>empVisibleInMonth(e,year,month,amPdf[e.id]||amPdf[`${e.nombre}|${e.apellido_paterno}`],false)&&e.sucursal_id===br.sucId);
+    if(!vis.length) return;
+
+    doc.setFontSize(9);doc.setFont('helvetica','bold');doc.text(br.name,10,y);y+=4;
     const head=[['Empleado','Puesto',...days.map(d=>String(d)),'A','F']];
     const rows=vis.map(e=>{
-      const d=am[e.id]||am[`${e.nombre}|${e.apellido_paterno}`]||Array(nDays).fill(0);
+      const d=amPdf[e.id]||amPdf[`${e.nombre}|${e.apellido_paterno}`]||Array(nDays).fill(0);
       const cells=days.map((_,i)=>ABR[d[i]||0]||'');
-      const nA=cells.filter(c=>c==='A').length,nF=cells.filter(c=>c==='F').length;
-      return[`${e.nombre} ${e.apellido_paterno}`,e.puesto||'',...cells,nA,nF];
+      return[`${e.nombre} ${e.apellido_paterno}`,e.puesto||'',...cells,cells.filter(c=>c==='A').length,cells.filter(c=>c==='F').length];
     });
     doc.autoTable({head,body:rows,startY:y,
       styles:{fontSize:6.5,cellPadding:1.2},
@@ -227,16 +227,16 @@ function exportAdminPDF(){
       columnStyles:{0:{cellWidth:32},1:{cellWidth:20}},
       didParseCell(data){
         if(data.section==='body'&&data.column.index>=2){
-          const c={'A':1,'F':2,'I':3,'D':4,'V':5,'B':6}[data.cell.raw];
+          const c={A:1,F:2,I:3,D:4,V:5,B:6,P:7}[data.cell.raw];
           if(c&&COL[c])data.cell.styles.fillColor=COL[c];
         }
       }});
     y=doc.lastAutoTable.finalY+10;
   });
-  doc.save(`Asistencia_${MONTHS_ES[month]}_${year}.pdf`);showToast('PDF exportado');
+  doc.save(`Asistencia_${MONTHS_ES[month]}_${year}.pdf`);
+  showToast('PDF exportado');
 }
 
-/* Import modal */
 function showImportModal(){
   const n=(window.HISTORICAL_DATA?.teh_emps?.length||0)+(window.HISTORICAL_DATA?.oax_emps?.length||0);
   const a=(window.HISTORICAL_DATA?.teh_atts?.length||0)+(window.HISTORICAL_DATA?.oax_atts?.length||0);
